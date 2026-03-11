@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from "react";
 import Webcam from "react-webcam";
 import * as faceapi from "face-api.js";
 import Songs from "./Songs";
+import axios from "axios";
 
 function MoodDetector() {
   const webcamRef = useRef(null);
@@ -11,6 +12,7 @@ function MoodDetector() {
   const [confidence, setConfidence] = useState(0);
   const [status, setStatus] = useState("LOADING");
   const [modelsLoaded, setModelsLoaded] = useState(false);
+  const [songs, setSongs] = useState([]);
 
   const getMoodConfig = (currentMood) => {
     const map = {
@@ -27,17 +29,21 @@ function MoodDetector() {
 
   const moodConfig = getMoodConfig(mood);
 
+  // Load Models
   useEffect(() => {
     const loadModels = async () => {
       try {
         const MODEL_URL = "/models/weights";
+
         await Promise.all([
           faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
           faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
         ]);
+
         setModelsLoaded(true);
         setStatus("READY");
-      } catch {
+      } catch (error) {
+        console.error(error);
         setStatus("ERROR");
       }
     };
@@ -49,41 +55,68 @@ function MoodDetector() {
     };
   }, []);
 
+  // Start Detection
   const startDetection = () => {
-    if (!modelsLoaded || intervalRef.current) return;
+  if (!modelsLoaded) {
+    console.log("Models not loaded");
+    return;
+  }
 
-    intervalRef.current = setInterval(async () => {
-      const video = webcamRef.current?.video;
-      if (!video || video.readyState !== 4) return;
+  if (intervalRef.current) clearInterval(intervalRef.current);
 
-      setStatus("SCANNING");
+  setStatus("SCANNING");
 
-      const detection = await faceapi
-        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-        .withFaceExpressions();
+  intervalRef.current = setInterval(async () => {
+    const video = webcamRef.current?.video;
 
-      if (!detection) {
-        setMood("NO FACE");
-        setConfidence(0);
-        return;
+    if (!video || video.readyState !== 4) return;
+
+    const detection = await faceapi
+      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+      .withFaceExpressions();
+
+    if (!detection) {
+      setMood("NO FACE");
+      setConfidence(0);
+      return;
+    }
+
+    const expressions = detection.expressions;
+
+    const [emotion, value] = Object.entries(expressions).reduce((a, b) =>
+      a[1] > b[1] ? a : b
+    );
+
+    setMood(emotion.toUpperCase());
+    setConfidence(Math.round(value * 100));
+
+  }, 700);
+};
+
+  // Fetch Songs
+  useEffect(() => {
+    if (mood === "INITIALIZING" || mood === "NO FACE") return;
+
+    const fetchSongs = async () => {
+      try {
+        const res = await axios.get(
+          `http://localhost:3000/songs?mood=${mood.toLowerCase()}`
+        );
+
+        setSongs(res.data.songs);
+      } catch (err) {
+        console.error(err);
       }
+    };
 
-      const expressions = detection.expressions;
-      const [emotion, value] = Object.entries(expressions).reduce(
-        (a, b) => (a[1] > b[1] ? a : b)
-      );
-
-      setMood(emotion.toUpperCase());
-      setConfidence(Math.round(value * 100));
-    }, 700);
-  };
+    fetchSongs();
+  }, [mood]);
 
   return (
     <div className="min-h-screen overflow-hidden bg-gradient-to-br from-gray-950 via-gray-900 to-black text-gray-100 px-6 flex flex-col items-center justify-start">
 
-
       {/* Navbar */}
-      <nav className="w-full max-w-6xl py-6 flex justify-between items-center">
+      <nav className="w-full max-w-6xl py-5 flex justify-between items-center">
         <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">
           🎧 Moody Player
         </h1>
@@ -103,38 +136,36 @@ function MoodDetector() {
       </nav>
 
       {/* Main Section */}
-      <div className="w-full max-w-6xl mt-3 flex flex-col md:flex-row gap-8">
+      <div className="w-full max-w-6xl mt-1 flex flex-col md:flex-row gap-8">
 
-        {/* LEFT - Webcam Section */}
+        {/* Webcam */}
         <div className="flex-1 backdrop-blur-xl bg-white/5 border border-white/10 rounded-3xl overflow-hidden shadow-xl">
 
-          {/* Webcam */}
           <div className="relative aspect-[4/3]">
             <Webcam
               ref={webcamRef}
-              onUserMedia={startDetection}
               className="w-full h-full object-cover scale-x-[-1]"
               videoConstraints={{ facingMode: "user" }}
             />
-            <div className="absolute inset-0 bg-black/10" />
           </div>
 
-          {/* Mood Info */}
-          <div className="p-6 space-y-6">
+          <div className="p-5 space-y-6">
 
             <div className="flex items-center gap-4">
               <span className="text-4xl">{moodConfig.emoji}</span>
+
               <div>
                 <p className={`text-2xl font-black ${moodConfig.color}`}>
                   {mood}
                 </p>
+
                 <p className="text-xs text-slate-400">
                   Facial expression detected
                 </p>
               </div>
             </div>
 
-            {/* Confidence Bar */}
+            {/* Confidence */}
             <div>
               <div className="flex justify-between text-xs text-slate-400 mb-1">
                 <span>Confidence</span>
@@ -149,26 +180,20 @@ function MoodDetector() {
               </div>
             </div>
 
-            {/* Button Section */}
-            <div>
-              <h2 className="text-xl font-bold mb-2">
-                Live Mood Detection
-              </h2>
-              <p className="text-sm text-slate-400 mb-4">
-                Your mood is analyzed in real time using facial expressions.
-              </p>
-
-              <button className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition">
-                Start Listening
-              </button>
-            </div>
+            {/* Detect Mood Button */}
+            <button
+              onClick={startDetection}
+              className="w-full bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-indigo-700 transition"
+            >
+              Detect Mood
+            </button>
 
           </div>
         </div>
 
-        {/* RIGHT - Songs Section */}
+        {/* Songs */}
         <div className="flex-1 backdrop-blur-xl bg-white/5 border border-white/10 rounded-3xl p-6 shadow-xl">
-          <Songs />
+          <Songs songs={songs} mood={mood} />
         </div>
 
       </div>
