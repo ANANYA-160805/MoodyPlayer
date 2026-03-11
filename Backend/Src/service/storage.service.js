@@ -1,4 +1,5 @@
 const ImageKit = require("imagekit");
+var mongoose = require("mongoose");
 
 const imagekit = new ImageKit({
   publicKey : process.env.IMAGEKIT_PUBLIC_KEY,
@@ -10,7 +11,8 @@ function uploadFile(file){
     return new Promise((resolve,reject)=>{
         imagekit.upload({   
             file:file.buffer,
-            fileName:"Kabhi-Jo-Baadal-Barse",
+            fileName: new mongoose.Types.ObjectId().toString(),
+            folder:"songs-folder"
         },(err,result)=>{
             if(err){
                 reject(err);
