@@ -20,7 +20,6 @@ router.post('/songs',upload.single('audio'),async (req,res)=>{
   title: req.body.title,
   artist: req.body.artist,
   audio: fileData.url,
-  cover: req.body.cover,
   mood: req.body.mood.toLowerCase().trim()
 });
     res.status(201).json({
