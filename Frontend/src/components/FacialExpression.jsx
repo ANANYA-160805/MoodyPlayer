@@ -93,7 +93,6 @@ function MoodDetector() {
   }, 700);
 };
 
-  // Fetch Songs
   useEffect(() => {
     if (mood === "INITIALIZING" || mood === "NO FACE") return;
 

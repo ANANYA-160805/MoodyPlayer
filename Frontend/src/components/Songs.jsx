@@ -1,19 +1,30 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 
 const Songs = ({ songs, mood }) => {
   const [currentSong, setCurrentSong] = useState(null);
   const audioRef = useRef(null);
 
   const playSong = (song) => {
-    setCurrentSong(song);
+    // if same song clicked → restart it
+    if (currentSong?.audio === song.audio) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play();
+      return;
+    }
 
-    setTimeout(() => {
-      if (audioRef.current) {
-        audioRef.current.load();
-        audioRef.current.play();
-      }
-    }, 100);
+    setCurrentSong(song);
   };
+
+  // handle playback properly when song changes
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.load();
+      audioRef.current.play().catch((err) => {
+        console.error("Playback error:", err);
+      });
+    }
+  }, [currentSong]);
 
   if (!songs || songs.length === 0) {
     return (
@@ -29,7 +40,6 @@ const Songs = ({ songs, mood }) => {
 
   return (
     <div className="flex flex-col h-full">
-
       {/* Header */}
       <div className="mb-6">
         <h2 className="text-2xl font-bold">🎧 Recommended Songs</h2>
@@ -41,18 +51,16 @@ const Songs = ({ songs, mood }) => {
 
       {/* Song List */}
       <div className="grid grid-cols-1 gap-4">
-        {songs.map((song, index) => (
+        {songs.map((song) => (
           <div
-            key={index}
-            className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:scale-[1.02] transition cursor-pointer"
+            key={song.id || song.audio} // better key
+            className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:scale-[1.02] transition"
           >
-            {/* Song Info */}
-            <div className="flex-1" onClick={() => playSong(song)}>
+            <div className="flex-1">
               <h3 className="font-semibold">{song.title}</h3>
               <p className="text-sm text-slate-400">{song.artist}</p>
             </div>
 
-            {/* Play Button */}
             <button
               onClick={() => playSong(song)}
               className="bg-indigo-500 hover:bg-indigo-600 text-white rounded-full w-10 h-10 flex items-center justify-center"
@@ -71,12 +79,7 @@ const Songs = ({ songs, mood }) => {
             <p className="text-sm text-slate-400">{currentSong.artist}</p>
           </div>
 
-          <audio
-            ref={audioRef}
-            controls
-            autoPlay
-            className="w-full"
-          >
+          <audio ref={audioRef} controls className="w-full">
             <source src={currentSong.audio} type="audio/mpeg" />
           </audio>
         </div>
